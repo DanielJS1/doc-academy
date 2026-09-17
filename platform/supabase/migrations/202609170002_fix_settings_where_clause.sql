@@ -1,35 +1,5 @@
-begin;
-alter table academy_attempts add column quiz_id text not null default '';
-update academy_attempts set quiz_id=coalesce((select l->>'id' from jsonb_array_elements(snapshot->'lessons') l where l->>'type'='quiz' limit 1),'legacy');
-update academy_attempts set snapshot=snapshot||jsonb_build_object('quizId',quiz_id);
-drop index academy_one_active_attempt;
-create unique index academy_one_active_attempt on academy_attempts(user_id,course_id,version,quiz_id) where status in ('pending','approved');
-
--- Preserve the existing course assessment in the first assessment activity.
-create function public.academy_activity_format(body jsonb) returns jsonb
-language sql immutable set search_path=public,pg_temp as $$
- select case when body is null then null else body || jsonb_build_object('questions','[]'::jsonb,'lessons',coalesce((
-  select jsonb_agg(case when l->>'type'='quiz' then l||jsonb_build_object('questions',coalesce(l->'questions',case when l->>'id'=(select x->>'id' from jsonb_array_elements(body->'lessons') x where x->>'type'='quiz' limit 1) then body->'questions' else '[]'::jsonb end,'[]'::jsonb)) else l end order by n)
-  from jsonb_array_elements(body->'lessons') with ordinality as a(l,n)
- ),'[]'::jsonb)) end;
-$$;
-update academy_resources set published=academy_activity_format(published),draft=academy_activity_format(draft) where kind='course';
-revoke all on function academy_activity_format(jsonb) from public,anon,authenticated;
-grant execute on function academy_activity_format(jsonb) to service_role;
-
-update academy_xp x set event_key='approval:'||coalesce((select l->>'id' from academy_resources r cross join lateral jsonb_array_elements(r.published->'lessons') l where r.id=x.course_id and l->>'type'='quiz' limit 1),'legacy') where event_key='approval';
-
-create function public.academy_course_completed(learner uuid, course text, revision integer) returns boolean
-language sql stable set search_path=public,pg_temp as $$
- select exists(select 1 from academy_resources r where r.id=$2 and r.revision=$3 and r.published is not null
-  and jsonb_array_length(r.published->'lessons')>0
-  and not exists(select 1 from jsonb_array_elements(r.published->'lessons') l where
-   (l->>'type'='quiz' and not exists(select 1 from academy_attempts a where a.user_id=$1 and a.course_id=$2 and a.version=$3 and a.quiz_id=l->>'id' and a.status='approved'))
-   or (l->>'type'<>'quiz' and not exists(select 1 from academy_progress p where p.user_id=$1 and p.course_id=$2 and p.version=$3 and p.lesson_id=l->>'id' and p.done))
-  ));
-$$;
-revoke all on function academy_course_completed(uuid,text,integer) from public,anon,authenticated;
-grant execute on function academy_course_completed(uuid,text,integer) to service_role;
+﻿-- Migration: 202609170002_fix_settings_where_clause.sql
+-- Fixes 'UPDATE requires a WHERE clause' in PostgreSQL / Supabase for academy_settings
 
 create or replace function public.academy_mutate(actor uuid, command jsonb) returns void
 language plpgsql set search_path=public,pg_temp as $$
@@ -120,7 +90,6 @@ begin
   insert into public.academy_preferences(user_id,bookmarks,read_notices) values(actor,command->'bookmarks',command->'readNotices') on conflict(user_id) do update set bookmarks=excluded.bookmarks,read_notices=excluded.read_notices;
  elsif op='profile' then
   body:=command->'data'; target:=(body->>'id')::uuid;
-  -- Não permite remover o próprio acesso administrativo por engano.
   if target=actor and (body->>'role'<>'admin' or body->>'status'<>'active') then raise exception 'Seu próprio acesso administrativo deve permanecer ativo'; end if;
   if nullif(body->>'managerId','') is not null and not exists(select 1 from public.academy_profiles where id=(body->>'managerId')::uuid and role in ('admin','manager') and status='active') then raise exception 'Gestor inválido'; end if;
   update public.academy_profiles set name=body->>'name',department=body->>'department',manager_id=nullif(body->>'managerId','')::uuid,role=body->>'role',status=body->>'status' where id=target;
@@ -141,4 +110,3 @@ end;
 $$;
 revoke all on function public.academy_mutate(uuid,jsonb) from public,anon,authenticated;
 grant execute on function public.academy_mutate(uuid,jsonb) to service_role;
-commit;
