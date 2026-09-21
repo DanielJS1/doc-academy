@@ -1,7 +1,6 @@
-import { CommunityArticle } from "@/components/community/community-article";
+import { ArticleEditor } from "@/components/editors/article-editor";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <CommunityArticle id={id} />;
+  return <ArticleEditor id={id} />;
 }
-
