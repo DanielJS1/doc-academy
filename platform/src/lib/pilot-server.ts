@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { isAllowedCompanyEmail, normalizeEmail, pendingStudentProfile } from "./registration-security";
 import { DEPARTMENTS } from "./departments";
 import { courseXp } from "./rewards";
-import { commandSchema } from "./pilot-contract";
+import { commandSchema, mergeWatched } from "./pilot-contract";
+import { videoIsComplete } from "./video-completion";
 import { executeCommunity, readCommunity } from "./community-server";
 import { courseSchema, articleSchema, vimeoEmbed, safeImage, isCourseAvailableForCartorio, type AcademyState, type Course, type Article, type Cartorio } from "./model";
 import { isStoredMediaUrl } from "./storage-service";
@@ -298,7 +299,28 @@ export async function executeCommand(db:ReturnType<typeof database>,me:Profile,i
  }
  if(command.type==="video"){
   const {error}=await db.rpc("academy_save_video_progress",{actor:me.id,command});
-  if(error)throw new ApiError(error.message);return;
+  if(error){
+   if(error.code==="PGRST202"||error.message?.includes("academy_save_video_progress")||error.message?.includes("Could not find function")){
+    const existing=await db.from("academy_progress").select("done").eq("user_id",me.id).eq("course_id",command.courseId).eq("version",command.version).eq("lesson_id",command.lessonId).maybeSingle();
+    const watchedMerged=mergeWatched(command.ranges??[],command.duration);
+    const complete=existing.data?.done || videoIsComplete(watchedMerged.seconds,command.duration,command.position);
+    const {error:upsertError}=await db.from("academy_progress").upsert({
+     user_id:me.id,
+     course_id:command.courseId,
+     version:command.version,
+     lesson_id:command.lessonId,
+     position:command.position??0,
+     duration:command.duration,
+     ranges:command.ranges??[],
+     done:complete,
+     updated_at:new Date().toISOString()
+    });
+    if(upsertError)throw new ApiError(upsertError.message);
+    return;
+   }
+   throw new ApiError(error.message);
+  }
+  return;
  }
  const {error}=await db.rpc("academy_mutate",{actor:me.id,command});if(error)throw new ApiError(error.message);
 }

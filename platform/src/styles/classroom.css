@@ -69,6 +69,18 @@
   gap: 23px;
 }
 
+.player-grid.video-theater:not(.focus-mode) { container-type: inline-size; }
+.player-grid.video-theater:not(.focus-mode) > .curriculum {
+  height: min(var(--classroom-video-max-height, calc(100dvh - 220px)), calc((100cqw - 308px) * 0.5625));
+  max-height: none;
+}
+
+@media (max-width: 1250px) and (min-width: 1021px) {
+  .player-grid.video-theater:not(.focus-mode) > .curriculum {
+    height: min(var(--classroom-video-max-height, calc(100dvh - 220px)), calc((100cqw - 268px) * 0.5625));
+  }
+}
+
 .player-grid.focus-mode {
   grid-template-columns: minmax(0, 1fr) 56px;
   gap: 16px;
@@ -246,7 +258,7 @@
 .video-frame {
   aspect-ratio: 16 / 9;
   width: 100%;
-  max-height: min(62vh, calc(100dvh - 220px));
+  max-height: var(--classroom-video-max-height, calc(100dvh - 220px));
   background: #18181b;
   border-radius: 14px;
   overflow: hidden;
@@ -346,7 +358,7 @@
 
 /* Curriculum sidebar */
 .curriculum {
-  padding: 20px;
+  padding: 16px;
   align-self: start;
   position: sticky;
   top: 90px;
@@ -357,6 +369,7 @@
 }
 
 .curriculum-list {
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -370,17 +383,18 @@
 
 @media (max-width: 1020px) {
   .curriculum { max-height: none; }
+  .player-grid.video-theater:not(.focus-mode) > .curriculum { height: auto; }
   .curriculum-list { max-height: min(60dvh, 500px); }
 }
 
 .curriculum h2 {
-  font-size: 13px;
+  font-size: 15px;
   margin-bottom: 5px;
 }
 
 .curriculum > p {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
   margin-bottom: 12px;
 }
 
@@ -392,11 +406,12 @@
   color: var(--ink);
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 12px 9px;
+  gap: 8px;
+  padding: 9px 8px;
   border-radius: 8px;
   margin-bottom: 4px;
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .lesson-button:hover {
@@ -410,11 +425,13 @@
 
 .lesson-button > span {
   flex: 1;
+  min-width: 0;
 }
 
 .lesson-button small {
   display: block;
-  font-size: 8px;
+  font-size: 10px;
+  line-height: 1.4;
   color: var(--muted);
   margin-top: 3px;
 }
@@ -428,10 +445,13 @@
 }
 
 .curriculum .module-title {
-  font-size: 8px;
+  font-size: 10px;
+  line-height: 1.35;
   letter-spacing: 0.5px;
-  margin-top: 7px;
+  margin-top: 10px;
 }
+
+.curriculum .card-progress { margin-top: 0; }
 
 /* Quiz & Questions */
 .quiz-question {
